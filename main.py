@@ -29,6 +29,8 @@ class game:
     
     def check_game_state(self):
         '''
+            Winning patterns:
+            
             # 1 (1, 1), 2 (2, 1), 3 (3, 1)
             # 4 (1, 2), 5 (2, 2), 6 (3, 2)
             # 7 (1, 3), 8 (2, 3), 9 (3, 3)
@@ -51,12 +53,14 @@ class game:
             # n3 = 3, i
         '''
         
+        # Scan for winning patterns
         n = [
             lambda i: self.is_match([self.current_board[i][0], self.current_board[1][1], self.current_board[2 - i][2]], True) or self.is_match([self.current_board[i][0], self.current_board[1][1], self.current_board[2 - i][2]], False),
             lambda i: self.is_match([self.current_board[i][0], self.current_board[i][1], self.current_board[i][2]], True) or self.is_match([self.current_board[i][0], self.current_board[i][1], self.current_board[i][2]], False),
             lambda i: self.is_match([self.current_board[0][i], self.current_board[1][i], self.current_board[2][i]], True) or self.is_match([self.current_board[0][i], self.current_board[1][i], self.current_board[2][i]], False),
         ]
 
+        # Evaluate scans
         for i in range(3):
             for n_func in n:
                 r = n_func(i)
@@ -65,18 +69,23 @@ class game:
                     self.gameover = True
                     return
 
+        # Check if board still has moves left
         for x in self.current_board:
             for y in x:
-                if y ==  None:
+                if y == None:
                     return
-                
+
+        # No moves left, board full
         print('Tie!\nGame over!')
         self.gameover = True
     
     def get_coordinates(self, move):
+        ''' Returns x, y coordinates from input x or input x, y '''
+
         try:
             pmove = move.split(',')
 
+            # x, y
             if len(pmove) == 2:
                 x = int(pmove[0])
                 y = int(pmove[1])
@@ -90,6 +99,7 @@ class game:
 
                 return [x, y]
             else:
+                # x
                 p1 = int(pmove[0])
 
                 if p1 <= 0 or p1 >= 10:
