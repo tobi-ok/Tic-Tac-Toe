@@ -1,24 +1,139 @@
 import random
 import math
+import time
 
 game_height = 3
 game_width = 3
 
+gamemodes = [
+    'pvp',
+    'pve',
+    'eve'
+]
+input_move_message = 'Input next move (ex. 1, 3 OR 1-9): '
+
+class NPC:
+    def __init__(self, game, difficulty=None):
+        self.game = game
+        self.mode = 'easy'
+
+    def easy_play(self):
+        ''' Chooses random spot '''
+
+        spots = []
+
+        for y in range(self.game.height):
+            for x in range(self.game.width):
+                spot = self.game.current_board[y][x]
+
+                if spot == None:
+                    spots.append((x, y))
+
+        return spots[random.randint(0, len(spots)-1)]
+
+    def execute(self):
+        ''' Make moves based on difficulty '''
+        coor = self.__getattribute__(f'{self.mode}_play')()
+        self.game.new_move(coor)
+
 class game:
-    def __init__(self, gamemode='pve'):
+    def __init__(self, board_width, board_height):
+        self.gamemode = None
+
+        while True:
+            self.gamemode = input('Gamemodes:\n1. PvP\n2. PvE\n3. EvE\nSelect: ')
+
+            try:
+                self.gamemode = int(self.gamemode)
+                self.gamemode = gamemodes[self.gamemode-1]
+                break
+            except (IndexError, ValueError):
+                print('Error - Invalid input')
+
+        self.width = board_width
+        self.height = board_height
         self.x_marker = ' X '
         self.o_marker = ' O '
         self.side_boarder_marker = ' | '
         self.line_boarder_marker = ' - '
-        self.current_board = self.new_board()
-        self.gamemode = gamemode
-        self.isX = True if random.randint(0, 1) == 1 else False
-        self.gameover = None
 
+        # Start new game
+        self.current_board = self.new_board()
+        self.isX = True if random.randint(0, 1) == 1 else False
+
+        if self.gamemode == 'eve':
+            self.NPC = NPC(self)
+        elif self.gamemode == 'pve':
+            def recursive_input(m, l):
+                new_input = input(m).lower()
+
+                if new_input in l:
+                    return l[new_input]
+                else:
+                    try:
+                        new_input = int(new_input)
+
+                        for i in l:
+                            if i == new_input:
+                                return i
+                            
+                        print('Error - Invalid input')
+                        return recursive_input(m, l)
+                    except (ValueError, IndexError):
+                        print('Error - Invalid input')
+                        return recursive_input(m, l)
+
+            chosen_side = recursive_input('Choose side:\n1. X\n2. O\nSelect: ', [1, 2, 'x', 'o'])
+            
+            if chosen_side == 1 or chosen_side == 'X':
+                chosen_side = True
+            elif chosen_side == 2 or chosen_side == 'O':
+                chosen_side = False
+            
+            difficulty = recursive_input('Choose NPC difficulty:\n1. Easy\n2. Medium\n3. Hard\nSelect: ', [1, 2, 3, 'easy', 'medium', 'hard'])
+            
+            if difficulty == 1:
+                difficulty = 'easy'
+            elif difficulty == 2:
+                difficulty = 'medium'
+            elif difficulty == 3:
+                difficulty = 'hard'
+
+            self.NPC = NPC(game=self, difficulty=difficulty)
+
+            # Random NPC first move
+            if chosen_side != self.isX:
+                self.NPC.execute()
+    
+    def pvp(self):
+        user_input = input(input_move_message)
+        coor = self.get_user_coordinates(user_input)
+        self.new_move(coor)
+
+    def pve(self):
+        user_input = input(input_move_message)
+        coor = self.get_user_coordinates(user_input)
+        self.new_move(coor)
+        self.NPC.execute()
+
+    def eve(self):
+        time.sleep(1.5)
+        print(f"\nNPC {'X' if self.isX else 'O'}'s move:")
+        self.NPC.execute()        
+    
+    def start(self):
+        print('Starting game...')
+        self.render()
+
+        while not self.is_over():
+            self.__getattribute__(self.gamemode)()
+            self.render()
+
+        # Show winning/tied game board
         self.render()
 
     def new_board(self):
-        return [[None for _ in range(game_height)] for _ in range(game_width)]
+        return [[None for _ in range(self.width)] for _ in range(self.height)]
     
     def is_match(self, values, value):
         for i in values:
@@ -27,7 +142,7 @@ class game:
         
         return values[0]
     
-    def check_game_state(self):
+    def is_over(self):
         '''
             Winning patterns:
             
@@ -53,21 +168,20 @@ class game:
             # n3 = 3, i
         '''
         
-        # Scan for winning patterns
+        # Setup scanners for winning patterns
         n = [
             lambda i: self.is_match([self.current_board[i][0], self.current_board[1][1], self.current_board[2 - i][2]], True) or self.is_match([self.current_board[i][0], self.current_board[1][1], self.current_board[2 - i][2]], False),
             lambda i: self.is_match([self.current_board[i][0], self.current_board[i][1], self.current_board[i][2]], True) or self.is_match([self.current_board[i][0], self.current_board[i][1], self.current_board[i][2]], False),
             lambda i: self.is_match([self.current_board[0][i], self.current_board[1][i], self.current_board[2][i]], True) or self.is_match([self.current_board[0][i], self.current_board[1][i], self.current_board[2][i]], False),
         ]
 
-        # Evaluate scans
+        # Execute scanners
         for i in range(3):
             for n_func in n:
                 r = n_func(i)
                 if r is not None:
                     print(f'Winner: {"X" if r else "O"}\nGame over!')
-                    self.gameover = True
-                    return
+                    return True
 
         # Check if board still has moves left
         for x in self.current_board:
@@ -77,13 +191,13 @@ class game:
 
         # No moves left, board full
         print('Tie!\nGame over!')
-        self.gameover = True
+        return True
     
-    def get_coordinates(self, move):
+    def get_user_coordinates(self, user_input):
         ''' Returns x, y coordinates from input x or input x, y '''
 
         try:
-            pmove = move.split(',')
+            pmove = user_input.split(',')
 
             # x, y
             if len(pmove) == 2:
@@ -108,7 +222,7 @@ class game:
                 
                 if p1 <= 3:
                     p1 = p1 if p1 - 1 < 0 else p1 - 1
-                    return [0, p1]
+                    return [p1, 0]
                 else:
                     # x = (a, b)
 
@@ -122,29 +236,24 @@ class game:
                     # 3, 6, 9 = 3
                     # b = i % 3 ? 0: 3
                     
-                    return [math.ceil(p1 / 3) - 1, (3 if p1 % 3 == 0 else p1 % 3) - 1]
+                    return [(3 if p1 % 3 == 0 else p1 % 3) - 1, math.ceil(p1 / 3) - 1]
         except:
             print('Error - Failed to process move')
             return
                                 
-    def new_move(self, input_move):
-        coor = self.get_coordinates(input_move)
-
+    def new_move(self, coor:tuple):
         if not coor:
             return
-
+        
         x, y = coor[0], coor[1]
-        spot = self.current_board[x][y]
+        spot = self.current_board[y][x]
 
         if spot is not None:
             print(f'{"X" if spot else "O"} is on {x, y}')
-            return
+            return self.new_move(self.get_user_coordinates(input(input_move_message)))
 
-        self.current_board[x][y] = self.isX
+        self.current_board[y][x] = self.isX
         self.isX = not self.isX
-
-        self.render() 
-        self.check_game_state()           
                 
     def render(self):
         game_map = ''
@@ -152,11 +261,11 @@ class game:
 
         game_map += ' '*len(self.line_boarder_marker) + ' 1  2  3\n' + self.line_boarder_marker*line_board_n + '\n'
         
-        for x in range(game_width):
+        for y in range(self.height):
             game_map += self.side_boarder_marker
 
-            for y in range(game_height):
-                spot = self.current_board[x][y]
+            for x in range(self.width):
+                spot = self.current_board[y][x]
 
                 if spot == True:
                     game_map += self.x_marker
@@ -165,14 +274,12 @@ class game:
                 else:
                     game_map += ' '*3
 
-            game_map += self.side_boarder_marker + f'{x+1} \n'
+            game_map += self.side_boarder_marker + f'{y+1} \n'
 
         game_map += self.line_boarder_marker*line_board_n
 
         print(game_map)
 
-ttt = game()
-
-while not ttt.gameover:
-    move = input('Input next move (ex. 1, 3 OR 1-9): ')
-    ttt.new_move(move)
+if __name__ == '__main__':
+    ttt = game(board_height=game_height, board_width=game_width)
+    ttt.start()
