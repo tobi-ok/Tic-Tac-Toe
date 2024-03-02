@@ -1,26 +1,33 @@
 import random
 import math
 import time
+import utils
 
-game_height = 3
-game_width = 3
-
-gamemodes = [
+GAME_WIDTH = 3
+GAME_HEIGHT = 3
+INPUT_MOVE_MESSAGE = 'Input next move (ex. 1, 3 OR 1-9): '
+GAMEMODES = [
     'pvp',
     'pve',
     'eve'
 ]
-input_move_message = 'Input next move (ex. 1, 3 OR 1-9): '
 
 class NPC:
     def __init__(self, game, difficulty=None):
         self.game = game
         self.mode = difficulty
 
+        if difficulty is None:
+            difficulty = utils.recursive_input('Choose NPC difficulty:\n1. Easy\n2. Hard\nSelect: ', [1, 2, 'easy', 'hard'])
+            
+            if difficulty == 1:
+                difficulty = 'easy'
+            elif difficulty == 2:
+                difficulty = 'hard'
+
+            self.mode = difficulty
+                    
     def hard_play(self):
-        pass
-    
-    def medium_play(self):
         # Setup scanners for all patterns
         current_side = self.game.current_side
         other_side = 'O' if self.game.turn_isX() else 'X'
@@ -76,7 +83,8 @@ class NPC:
                 if spot is None:
                     spots.append((x, y))
 
-        return spots[random.randint(0, len(spots)-1)]
+        if spots:
+            return spots[random.randint(0, len(spots)-1)]
 
     def execute(self):
         ''' Make moves based on difficulty '''
@@ -89,19 +97,6 @@ class NPC:
 
 class game:
     def __init__(self, board_width, board_height, **k):
-        self.gamemode = k.get('gamemode')
-
-        if self.gamemode is None:
-            while True:
-                self.gamemode = input('Gamemodes:\n1. PvP\n2. PvE\n3. EvE\nSelect: ')
-
-                try:
-                    self.gamemode = int(self.gamemode)
-                    self.gamemode = gamemodes[self.gamemode-1]
-                    break
-                except (IndexError, ValueError):
-                    print('Error - Invalid input')
-
         self.width = board_width
         self.height = board_height
         self.X_marker = ' X '
@@ -113,49 +108,41 @@ class game:
         self.current_board = k.get('new_board') or self.new_board()
         self.current_side = k.get('starting_side') or ('X' if random.randint(0, 1) == 1 else 'O')
 
+        self.change_gamemode(k.get('gamemode'))
+
         if self.gamemode == 'eve':
-            self.NPC = NPC(self)
+            self.NPC = NPC(game=self, difficulty=k.get('difficulty'))
         elif self.gamemode == 'pve':
-            def recursive_input(m, l):
-                new_input = input(m).upper()
-
-                if new_input in l:
-                    return l[new_input]
-                else:
-                    try:
-                        new_input = int(new_input)
-
-                        for i in l:
-                            if i == new_input:
-                                return i
-                            
-                        print('Error - Invalid input')
-                        return recursive_input(m, l)
-                    except (ValueError, IndexError):
-                        print('Error - Invalid input')
-                        return recursive_input(m, l)
-
-            chosen_side = k.get('chosen_side') or recursive_input('Choose side:\n1. X\n2. O\nSelect: ', [1, 2, 'X', 'O'])
+            chosen_side = k.get('chosen_side') or utils.recursive_input('Choose side:\n1. X\n2. O\nSelect: ', [1, 2, 'X', 'O'])
             
             if chosen_side == 1:
                 chosen_side = 'X'
             elif chosen_side == 2:
                 chosen_side = 'O'
             
-            difficulty = k.get('difficulty') or recursive_input('Choose NPC difficulty:\n1. Easy\n2. Medium\n3. Hard\nSelect: ', [1, 2, 3, 'easy', 'medium', 'hard'])
-            
-            if difficulty == 1:
-                difficulty = 'easy'
-            elif difficulty == 2:
-                difficulty = 'medium'
-            elif difficulty == 3:
-                difficulty = 'hard'
-
-            self.NPC = NPC(game=self, difficulty=difficulty)
+            self.NPC = NPC(game=self, difficulty=k.get('difficulty'))
 
             # Random NPC first move
             if chosen_side != self.current_side:
                 self.NPC.execute()
+    
+    def change_gamemode(self, gamemode):
+        while True:
+            gamemode = gamemode or input('Gamemodes:\n1. PvP\n2. PvE\n3. EvE\nSelect: ')
+
+            if gamemode.lower() in GAMEMODES:
+                self.gamemode = gamemode.lower()
+                return
+
+            try:
+                gamemode = int(gamemode)
+                gamemode = GAMEMODES[gamemode-1]
+                self.gamemode = gamemode
+                return
+            except (IndexError, ValueError):
+                print('Error - Invalid input')
+            finally:
+                gamemode = None
     
     def turn_isX(self):
         if self.current_side == 'X':
@@ -168,12 +155,12 @@ class game:
             self.current_side = 'X'
 
     def pvp(self):
-        user_input = input(input_move_message)
+        user_input = input(INPUT_MOVE_MESSAGE)
         coor = self.get_user_coordinates(user_input)
         self.new_move(coor)
 
     def pve(self):
-        user_input = input(input_move_message)
+        user_input = input(INPUT_MOVE_MESSAGE)
         coor = self.get_user_coordinates(user_input)
         self.new_move(coor)
 
@@ -195,7 +182,12 @@ class game:
             self.__getattribute__(self.gamemode)()
             self.render()
 
-        # Show winning/tied game board
+        # Show winning/tied game board        
+        if self.winner:
+            print(f'\nWinner: {self.winner}\nGame over!')
+        else:
+            print('\nTie!\nGame over!')
+
         self.render()
 
     def new_board(self):
@@ -261,8 +253,7 @@ class game:
             for n_func in n:
                 r = n_func(i)
                 if r:
-                    last_turn = 'O' if self.turn_isX() else 'X'
-                    print(f'Winner: {last_turn}\nGame over!')
+                    self.winner = 'O' if self.turn_isX() else 'X'
                     return True
 
         # Check if board still has moves left
@@ -272,14 +263,13 @@ class game:
                     return
 
         # No moves left, board full
-        print('Tie!\nGame over!')
         return True
     
     def get_user_coordinates(self, user_input):
         ''' Returns x, y coordinates from input x or input x, y '''
 
         while True:
-            user_input = user_input or input(input_move_message)
+            user_input = user_input or input(INPUT_MOVE_MESSAGE)
 
             try:
                 pmove = user_input.split(',')
@@ -319,7 +309,7 @@ class game:
                         # 1, 4, 7 = 1
                         # 2, 5, 8 = 2
                         # 3, 6, 9 = 3
-                        # b = i % 3 ? 0: 3
+                        # b = i % 3 if 0; 3
                         
                         return [(3 if p1 % 3 == 0 else p1 % 3) - 1, math.ceil(p1 / 3) - 1]
             except:
@@ -365,5 +355,5 @@ class game:
         print('\n' + game_map)
 
 if __name__ == '__main__':
-    ttt = game(board_height=game_height, board_width=game_width)
+    ttt = game(board_height=GAME_HEIGHT, board_width=GAME_WIDTH)
     ttt.start()

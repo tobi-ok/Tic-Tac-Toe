@@ -6,7 +6,7 @@ game_height = 3
 CL_inputs = {
     'gamemode': ['pvp', 'pve', 'eve'],
     'chosen_side': ['x', 'o'],
-    'difficulty': ['easy', 'medium', 'hard']
+    'difficulty': ['easy', 'hard']
 }
 
 argv = sys.argv[1:]
